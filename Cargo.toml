@@ -1,0 +1,36 @@
+[package]
+name = "codecairn"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/flame/codecairn"
+description = "Model-free project map for AI assistants"
+readme = "README.md"
+keywords = ["ai", "code", "map", "analysis", "repository"]
+categories = ["development-tools", "command-line-utilities"]
+
+[[bin]]
+name = "codecairn"
+path = "src/main.rs"
+
+[[bin]]
+name = "gen-platform-pkgs"
+path = "scripts/gen-platform-pkgs.rs"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+
+[dependencies]
+ignore = "0.4"
+regex = "1"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+walkdir = "2"
+anyhow = "1.0"
+clap = { version = "4", features = ["derive"] }
+glob = "0.3"
+toml = "0.8"

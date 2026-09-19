@@ -1,0 +1,6 @@
+/target
+node_modules/
+*.tgz
+*.log
+npm/debug.log
+npm/platforms/*/bin/

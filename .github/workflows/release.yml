@@ -1,0 +1,147 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+
+jobs:
+  verify:
+    name: Verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Check formatting
+        run: cargo fmt --check
+      - name: Lint
+        run: cargo clippy -D warnings
+      - name: Test
+        run: cargo test
+
+  build:
+    name: Build ${{ matrix.target }}
+    needs: verify
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            npm_platform: linux-x64
+            rust_target: x86_64-unknown-linux-gnu
+          - target: x86_64-unknown-linux-musl
+            os: ubuntu-latest
+            npm_platform: linux-x64-musl
+            rust_target: x86_64-unknown-linux-musl
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
+            npm_platform: linux-arm64
+            rust_target: aarch64-unknown-linux-gnu
+          - target: x86_64-apple-darwin
+            os: macos-14
+            npm_platform: darwin-x64
+            rust_target: x86_64-apple-darwin
+          - target: aarch64-apple-darwin
+            os: macos-14
+            npm_platform: darwin-arm64
+            rust_target: aarch64-apple-darwin
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            npm_platform: win32-x64
+            rust_target: x86_64-pc-windows-msvc
+          - target: aarch64-pc-windows-msvc
+            os: windows-latest
+            npm_platform: win32-arm64
+            rust_target: aarch64-pc-windows-msvc
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust_target }}
+      - name: Install cross-compilation tools (Linux ARM/musl)
+        if: matrix.target == 'aarch64-unknown-linux-gnu' || matrix.target == 'x86_64-unknown-linux-musl'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu libc6-dev-arm64-cross
+          rustup target add ${{ matrix.rust_target }}
+      - name: Build
+        run: cargo build --release --target ${{ matrix.rust_target }}
+        env:
+          TARGET: ${{ matrix.rust_target }}
+      - name: Smoke test
+        run: |
+          ./target/${{ matrix.rust_target }}/release/codecairn --version
+          ./target/${{ matrix.rust_target }}/release/codecairn . --format json > /dev/null
+      - name: Generate npm platform package
+        run: cargo run --bin gen-platform-pkgs
+        env:
+          TARGET: ${{ matrix.rust_target }}
+      - name: Upload platform package
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-platform-${{ matrix.npm_platform }}
+          path: npm/platforms/${{ matrix.npm_platform }}/
+          retention-days: 1
+
+  package:
+    name: Package & Publish
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download all platform packages
+        uses: actions/download-artifact@v4
+        with:
+          pattern: npm-platform-*
+          path: npm/platforms/
+          merge-multiple: true
+      - name: Update main package version
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          sed -i "s/\"version\": \".*\"/\"version\": \"$VERSION\"/" npm/codecairn/package.json
+          # Also update optionalDependencies versions
+          for pkg in npm/platforms/*/package.json; do
+            sed -i "s/\"version\": \".*\"/\"version\": \"$VERSION\"/" "$pkg"
+          done
+          sed -i "s/\"@codecairn\\/[^\"]*\": \".*\"/\"@codecairn\\/$(basename $(dirname $pkg))\": \"$VERSION\"/g" npm/codecairn/package.json
+      - name: Publish platform packages
+        run: |
+          for dir in npm/platforms/*/; do
+            cd "$dir"
+            npm publish --access public --provenance
+            cd - > /dev/null
+          done
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: Publish main package
+        run: |
+          cd npm/codecairn
+          npm publish --access public --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: Publish to crates.io
+        run: cargo publish
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            target/x86_64-unknown-linux-gnu/release/codecairn
+            target/x86_64-unknown-linux-musl/release/codecairn
+            target/aarch64-unknown-linux-gnu/release/codecairn
+            target/x86_64-apple-darwin/release/codecairn
+            target/aarch64-apple-darwin/release/codecairn
+            target/x86_64-pc-windows-msvc/release/codecairn.exe
+            target/aarch64-pc-windows-msvc/release/codecairn.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

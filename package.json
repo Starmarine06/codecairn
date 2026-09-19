@@ -1,0 +1,12 @@
+{
+  "name": "codecairn-dev",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Development task runner for the codecairn monorepo (not published)",
+  "scripts": {
+    "clean": "node scripts/build.mjs clean",
+    "build": "node scripts/build.mjs build",
+    "smoke": "node scripts/build.mjs smoke",
+    "rebuild": "node scripts/build.mjs rebuild"
+  }
+}

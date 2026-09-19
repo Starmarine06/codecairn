@@ -1,0 +1,14 @@
+{
+  "cpu": [
+    "x64"
+  ],
+  "files": [
+    "bin"
+  ],
+  "license": "MIT",
+  "name": "@codecairn/win32-x64",
+  "os": [
+    "win32"
+  ],
+  "version": "0.1.0"
+}

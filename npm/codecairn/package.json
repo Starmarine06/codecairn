@@ -1,0 +1,19 @@
+{
+  "name": "codecairn",
+  "version": "0.1.0",
+  "description": "Model-free project map for AI assistants",
+  "bin": { "codecairn": "bin/codecairn.js" },
+  "files": ["bin"],
+  "license": "MIT",
+  "repository": "github:flame/codecairn",
+  "engines": { "node": ">=16" },
+  "optionalDependencies": {
+    "@codecairn/linux-x64": "0.1.0",
+    "@codecairn/linux-arm64": "0.1.0",
+    "@codecairn/linux-x64-musl": "0.1.0",
+    "@codecairn/darwin-x64": "0.1.0",
+    "@codecairn/darwin-arm64": "0.1.0",
+    "@codecairn/win32-x64": "0.1.0",
+    "@codecairn/win32-arm64": "0.1.0"
+  }
+}
