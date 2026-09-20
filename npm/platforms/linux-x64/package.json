@@ -4,5 +4,6 @@
   "os": ["linux"],
   "cpu": ["x64"],
   "files": ["bin"],
-  "license": "MIT"
+  "license": "MIT",
+  "repository": "github:Starmarine06/codecairn"
 }

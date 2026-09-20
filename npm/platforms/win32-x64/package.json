@@ -10,5 +10,6 @@
   "os": [
     "win32"
   ],
+  "repository": "github:Starmarine06/codecairn",
   "version": "0.1.0"
 }

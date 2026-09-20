@@ -76,10 +76,21 @@ jobs:
         run: cargo build --release --target ${{ matrix.rust_target }}
         env:
           TARGET: ${{ matrix.rust_target }}
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
+          CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER: musl-gcc
       - name: Smoke test
+        shell: bash
         run: |
-          ./target/${{ matrix.rust_target }}/release/codecairn --version
-          ./target/${{ matrix.rust_target }}/release/codecairn . --format json > /dev/null
+          BIN=./target/${{ matrix.rust_target }}/release/codecairn
+          if [[ "${{ matrix.rust_target }}" == *windows* ]]; then BIN="${BIN}.exe"; fi
+          RUN=()
+          if [[ "${{ matrix.rust_target }}" == "aarch64-unknown-linux-gnu" ]]; then
+            sudo apt-get install -y qemu-user-static libc6-arm64-cross
+            RUN=(qemu-aarch64-static -L /usr/aarch64-linux-gnu)
+          fi
+          "${RUN[@]}" "$BIN" --version
+          "${RUN[@]}" "$BIN" . --format json > "$RUNNER_TEMP/map.json"
+          test -s "$RUNNER_TEMP/map.json"
       - name: Generate npm platform package
         run: cargo run --bin gen-platform-pkgs
         env:
@@ -96,30 +107,32 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+      packages: write
+      id-token: write
     steps:
       - uses: actions/checkout@v4
       - name: Download all platform packages
         uses: actions/download-artifact@v4
         with:
           pattern: npm-platform-*
-          path: npm/platforms/
-          merge-multiple: true
+          path: dist/platforms/
+          merge-multiple: false
       - name: Update main package version
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           # Bump main package version and each platform's version
           sed -i "s/\"version\": \".*\"/\"version\": \"$VERSION\"/" npm/codecairn/package.json
-          for pkg in npm/platforms/*/package.json; do
+          for pkg in dist/platforms/npm-platform-*/package.json; do
             sed -i "s/\"version\": \".*\"/\"version\": \"$VERSION\"/" "$pkg"
           done
           # Bump each optionalDependency's requested version while keeping its key
           sed -E -i "s/(\"@codecairn\/[^\"]*\"[[:space:]]*:[[:space:]]*\")[^\"]*\"/\1$VERSION\"/" npm/codecairn/package.json
       - name: Publish platform packages
         run: |
-          for dir in npm/platforms/*/; do
-            cd "$dir"
-            npm publish --access public --provenance
-            cd - > /dev/null
+          for dir in dist/platforms/npm-platform-*/; do
+            (cd "$dir" && npm publish --access public --provenance)
           done
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
@@ -137,12 +150,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            target/x86_64-unknown-linux-gnu/release/codecairn
-            target/x86_64-unknown-linux-musl/release/codecairn
-            target/aarch64-unknown-linux-gnu/release/codecairn
-            target/x86_64-apple-darwin/release/codecairn
-            target/aarch64-apple-darwin/release/codecairn
-            target/x86_64-pc-windows-msvc/release/codecairn.exe
-            target/aarch64-pc-windows-msvc/release/codecairn.exe
+            dist/platforms/npm-platform-*/bin/codecairn*
+          fail_on_unmatched_files: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
