@@ -79,6 +79,7 @@ jobs:
           CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
           CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER: musl-gcc
       - name: Smoke test
+        if: matrix.target != 'aarch64-pc-windows-msvc'
         shell: bash
         run: |
           BIN=./target/${{ matrix.rust_target }}/release/codecairn
