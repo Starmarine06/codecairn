@@ -1,5 +1,7 @@
 # Plan: shipping `ctxmap` (Rust) as an npm package
 
+**Status: implemented.** The tool shipped as **`codecairn`** (name collision on `ctxmap`). Milestones 1-6 are done: binary-only Rust crate split into `src/{main,analyze,extract,format,resolve}.rs`, tree-sitter-first extraction with regex fallback (upgraded from regex-only), 30 unit tests green (`cargo test`), `cargo fmt --check` + `clippy -D warnings` clean, npm build/smoke loop (`npm run rebuild`) works, and CI (`release.yml`) builds all 7 targets, publishes platform npm packages then the main package, publishes to crates.io, and creates a GitHub Release. Two CI bugs were fixed during implementation: the version-stamp sed was rewriting `optionalDependencies` **keys** instead of bumping **values** (now verified against the real package.json), and the musl build step was missing `musl-tools`. The Alpine launcher detects musl upfront via `process.report.getReport().header` instead of fallback-on-missing-binary.
+
 **Goal:** `npx ctxmap` (or `npm i -g ctxmap`) works on Linux, macOS and Windows with **no Rust toolchain installed**, and the tool itself stays 100% Rust.
 
 ---
