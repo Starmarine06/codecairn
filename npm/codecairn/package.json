@@ -5,7 +5,7 @@
   "bin": { "codecairn": "bin/codecairn.js" },
   "files": ["bin"],
   "license": "MIT",
-  "repository": "github:flame/codecairn",
+  "repository": "github:Starmarine06/codecairn",
   "engines": { "node": ">=16" },
   "optionalDependencies": {
     "@codecairn/linux-x64": "0.1.0",
