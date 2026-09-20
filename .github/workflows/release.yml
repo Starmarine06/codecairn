@@ -130,6 +130,8 @@ jobs:
           done
           # Bump each optionalDependency's requested version while keeping its key
           sed -E -i "s/(\"@codecairn\/[^\"]*\"[[:space:]]*:[[:space:]]*\")[^\"]*\"/\1$VERSION\"/" npm/codecairn/package.json
+      - name: Configure npm auth
+        run: echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > "$HOME/.npmrc"
       - name: Publish platform packages
         run: |
           for dir in dist/platforms/npm-platform-*/; do
