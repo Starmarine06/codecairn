@@ -149,11 +149,28 @@ jobs:
         run: cargo publish --allow-dirty
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+      - name: Stage release binaries with platform names
+        shell: bash
+        run: |
+          mkdir -p dist/release
+          for dir in dist/platforms/npm-platform-*/; do
+            platform="${dir#*npm-platform-}"
+            platform="${platform%/}"
+            for bin in "$dir"bin/codecairn*; do
+              [ -e "$bin" ] || continue
+              name="$(basename "$bin")"
+              if [[ "$name" == *.exe ]]; then
+                cp "$bin" "dist/release/codecairn-${platform}.exe"
+              else
+                cp "$bin" "dist/release/codecairn-${platform}"
+              fi
+            done
+          done
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            dist/platforms/npm-platform-*/bin/codecairn*
+            dist/release/codecairn-*
           fail_on_unmatched_files: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
