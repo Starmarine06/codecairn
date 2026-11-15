@@ -831,16 +831,25 @@ mod tests {
                    func helper() {}\n";
         let (symbols, imports, purpose) = extract_symbols_imports_purpose(src, Language::Go);
         for want in ["MaxUsers", "ErrFull", "Store", "New", "Add"] {
-            assert!(symbols.contains(&want.to_string()), "missing {want}: {symbols:?}");
+            assert!(
+                symbols.contains(&want.to_string()),
+                "missing {want}: {symbols:?}"
+            );
         }
         for unwanted in ["hidden", "helper", "errHidden", "Local"] {
-            assert!(!symbols.contains(&unwanted.to_string()), "leaked {unwanted}: {symbols:?}");
+            assert!(
+                !symbols.contains(&unwanted.to_string()),
+                "leaked {unwanted}: {symbols:?}"
+            );
         }
         assert!(imports.contains(&"fmt".to_string()));
         assert!(imports.contains(&"strings".to_string()));
         assert!(imports.contains(&"github.com/acme/app/internal/logging".to_string()));
         assert_eq!(imports.len(), 3);
-        assert_eq!(purpose.as_deref(), Some("Package store keeps users in memory."));
+        assert_eq!(
+            purpose.as_deref(),
+            Some("Package store keeps users in memory.")
+        );
     }
 
     #[test]
