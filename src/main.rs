@@ -70,6 +70,7 @@ pub(crate) enum Language {
     TypeScript,
     Rust,
     JavaScript,
+    Go,
     Other,
 }
 
@@ -80,6 +81,7 @@ impl Language {
             "ts" | "tsx" => Language::TypeScript,
             "rs" => Language::Rust,
             "js" | "jsx" | "mjs" | "cjs" => Language::JavaScript,
+            "go" => Language::Go,
             _ => Language::Other,
         }
     }
@@ -90,6 +92,7 @@ impl Language {
             Language::TypeScript => "TypeScript",
             Language::Rust => "Rust",
             Language::JavaScript => "JavaScript",
+            Language::Go => "Go",
             Language::Other => "Other",
         }
     }

@@ -30,6 +30,7 @@ pub(crate) fn extract_symbols_imports_purpose(
         Language::TypeScript => extract_typescript(content),
         Language::Rust => extract_rust(content),
         Language::JavaScript => extract_javascript(content),
+        Language::Go => extract_go(content),
         Language::Other => (Vec::new(), Vec::new(), None),
     }
 }
@@ -45,6 +46,7 @@ fn tree_sitter_extract(content: &str, lang: Language) -> Option<(Vec<String>, Ve
         Language::TypeScript => tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into(),
         Language::Rust => tree_sitter_rust::LANGUAGE.into(),
         Language::JavaScript => tree_sitter_javascript::LANGUAGE.into(),
+        Language::Go => tree_sitter_go::LANGUAGE.into(),
         Language::Other => return None,
     };
     parser.set_language(&grammar).ok()?;
@@ -63,6 +65,7 @@ fn tree_sitter_extract(content: &str, lang: Language) -> Option<(Vec<String>, Ve
             Language::TypeScript => collect_typescript(node, content, &mut symbols, &mut imports),
             Language::Rust => collect_rust(node, content, &mut symbols, &mut imports),
             Language::JavaScript => collect_javascript(node, content, &mut symbols, &mut imports),
+            Language::Go => collect_go(node, content, &mut symbols, &mut imports),
             Language::Other => false,
         };
         if handled {
@@ -273,6 +276,56 @@ fn collect_rust(
     }
 }
 
+/// Go exports anything whose name starts with an uppercase letter.
+fn go_exported(name: &str) -> bool {
+    name.chars().next().is_some_and(|c| c.is_uppercase())
+}
+
+fn collect_go(
+    node: Node<'_>,
+    src: &str,
+    symbols: &mut Vec<String>,
+    imports: &mut Vec<String>,
+) -> bool {
+    match node.kind() {
+        "function_declaration" | "method_declaration" | "type_spec" | "type_alias" => {
+            if let Some(name) = node
+                .child_by_field_name("name")
+                .and_then(|n| node_text(n, src))
+            {
+                if go_exported(&name) {
+                    symbols.push(name);
+                }
+            }
+            // Function bodies hold no exported declarations.
+            node.kind() == "function_declaration" || node.kind() == "method_declaration"
+        }
+        "const_spec" | "var_spec" => {
+            // Only package-level declarations are exported; locals inside
+            // function bodies never reach here because those are not walked.
+            let mut cursor = node.walk();
+            for name in node.children_by_field_name("name", &mut cursor) {
+                if let Some(text) = node_text(name, src) {
+                    if go_exported(&text) {
+                        symbols.push(text);
+                    }
+                }
+            }
+            true
+        }
+        "import_spec" => {
+            if let Some(path) = node
+                .child_by_field_name("path")
+                .and_then(|n| node_text(n, src))
+            {
+                imports.push(path.trim_matches(|c| c == '"' || c == '`').to_string());
+            }
+            true
+        }
+        _ => false,
+    }
+}
+
 fn trim_quotes(s: &str) -> String {
     s.trim().trim_matches('"').trim_matches('\'').to_string()
 }
@@ -395,6 +448,11 @@ fn purpose_of(content: &str, lang: Language) -> Option<String> {
                             .trim()
                             .to_string(),
                     );
+                }
+            }
+            Language::Go => {
+                if trimmed.starts_with("//") {
+                    return Some(trimmed.trim_start_matches("//").trim().to_string());
                 }
             }
             Language::Other => {}
@@ -566,6 +624,39 @@ pub(crate) fn extract_rust(content: &str) -> (Vec<String>, Vec<String>, Option<S
     (symbols, imports, purpose)
 }
 
+pub(crate) fn extract_go(content: &str) -> (Vec<String>, Vec<String>, Option<String>) {
+    let mut symbols = Vec::new();
+    let mut imports = Vec::new();
+
+    let func_re = Regex::new(r"^func\s+(?:\([^)]*\)\s*)?([A-Z]\w*)").unwrap();
+    let type_re = Regex::new(r"^(?:type|const|var)\s+([A-Z]\w*)").unwrap();
+    let single_import_re = Regex::new(r#"^import\s+(?:[\w.]+\s+)?"([^"]+)""#).unwrap();
+    let block_import_re = Regex::new(r#"^\s*(?:[\w.]+\s+)?"([^"]+)"\s*$"#).unwrap();
+
+    let mut in_import_block = false;
+    for line in content.lines() {
+        if in_import_block {
+            if line.trim_start().starts_with(')') {
+                in_import_block = false;
+            } else if let Some(caps) = block_import_re.captures(line) {
+                imports.push(caps[1].to_string());
+            }
+            continue;
+        }
+        if line.trim_end() == "import (" {
+            in_import_block = true;
+        } else if let Some(caps) = single_import_re.captures(line) {
+            imports.push(caps[1].to_string());
+        } else if let Some(caps) = func_re.captures(line) {
+            symbols.push(caps[1].to_string());
+        } else if let Some(caps) = type_re.captures(line) {
+            symbols.push(caps[1].to_string());
+        }
+    }
+
+    (symbols, imports, purpose_of(content, Language::Go))
+}
+
 pub(crate) fn extract_javascript(content: &str) -> (Vec<String>, Vec<String>, Option<String>) {
     let mut symbols = Vec::new();
     let mut imports = Vec::new();
@@ -718,6 +809,46 @@ mod tests {
         assert!(imports.contains(&"path".to_string()));
         assert!(imports.contains(&"express".to_string()));
         assert_eq!(purpose.as_deref(), Some("Logger for the app"));
+    }
+
+    #[test]
+    fn go_finds_exported_items_imports_and_purpose() {
+        let src = "// Package store keeps users in memory.\n\
+                   package store\n\
+                   \n\
+                   import (\n\
+                   \t\"fmt\"\n\
+                   \tlog \"github.com/acme/app/internal/logging\"\n\
+                   )\n\
+                   import \"strings\"\n\
+                   \n\
+                   const MaxUsers = 10\n\
+                   var ErrFull, errHidden = fmt.Errorf(\"full\"), fmt.Errorf(\"x\")\n\
+                   type Store struct{ users []string }\n\
+                   type hidden struct{}\n\
+                   func New() *Store { return &Store{} }\n\
+                   func (s *Store) Add(name string) { const Local = 1; _ = Local; _ = strings.ToUpper(name); log.Info() }\n\
+                   func helper() {}\n";
+        let (symbols, imports, purpose) = extract_symbols_imports_purpose(src, Language::Go);
+        for want in ["MaxUsers", "ErrFull", "Store", "New", "Add"] {
+            assert!(symbols.contains(&want.to_string()), "missing {want}: {symbols:?}");
+        }
+        for unwanted in ["hidden", "helper", "errHidden", "Local"] {
+            assert!(!symbols.contains(&unwanted.to_string()), "leaked {unwanted}: {symbols:?}");
+        }
+        assert!(imports.contains(&"fmt".to_string()));
+        assert!(imports.contains(&"strings".to_string()));
+        assert!(imports.contains(&"github.com/acme/app/internal/logging".to_string()));
+        assert_eq!(imports.len(), 3);
+        assert_eq!(purpose.as_deref(), Some("Package store keeps users in memory."));
+    }
+
+    #[test]
+    fn go_regex_fallback_matches_tree_sitter_on_simple_files() {
+        let src = "package main\n\nimport (\n\t\"os\"\n\tf \"fmt\"\n)\n\nfunc Run() {}\nfunc (a *App) Start() {}\ntype App struct{}\nfunc private() {}\n";
+        let (symbols, imports, _) = extract_go(src);
+        assert_eq!(symbols, vec!["Run", "Start", "App"]);
+        assert_eq!(imports, vec!["os", "fmt"]);
     }
 
     #[test]

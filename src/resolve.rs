@@ -50,6 +50,7 @@ fn relative_extensions(lang: Language) -> &'static [&'static str] {
         Language::Rust => &[".rs"],
         Language::TypeScript => &[".ts", ".tsx"],
         Language::JavaScript => &[".js", ".jsx", ".mjs", ".cjs"],
+        Language::Go => &[".go"],
         Language::Other => &[],
     }
 }

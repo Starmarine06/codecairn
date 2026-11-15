@@ -60,6 +60,11 @@ pub(crate) fn guess_directory_role(dir: &str, files: &[&FileInfo]) -> String {
     let has_py = files.iter().any(|f| f.language == Language::Python);
     let has_ts = files.iter().any(|f| f.language == Language::TypeScript);
     let has_rs = files.iter().any(|f| f.language == Language::Rust);
+    let has_go = files.iter().any(|f| f.language == Language::Go);
+
+    if has_go && !has_py && !has_ts && !has_rs {
+        return "go".to_string();
+    }
 
     if has_py && !has_ts && !has_rs {
         return "python".to_string();

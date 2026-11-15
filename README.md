@@ -10,7 +10,7 @@ Model-free project map for AI assistants. Reads a codebase and prints a Markdown
 
 ## How it works (no model)
 
-- Tree-sitter parses each file to extract symbols and imports (Python, TypeScript, Rust, JavaScript), with regex fallbacks when a grammar is unavailable
+- Tree-sitter parses each file to extract symbols and imports (Python, TypeScript, Rust, JavaScript, Go), with regex fallbacks when a grammar is unavailable
 - Imports are resolved to local files to build a dependency graph
 - Files are ranked by how many others use them — the same idea behind Aider's "repo map"
 
@@ -116,6 +116,7 @@ available. Use this as a starting point; read specific files for details.*
 - TypeScript (`.ts`, `.tsx`)
 - Rust (`.rs`)
 - JavaScript (`.js`, `.jsx`, `.mjs`, `.cjs`)
+- Go (`.go`): exported functions, methods, types, constants and variables, plus imports. Imports are listed but not yet linked to the files they point at
 
 ## Manifest Files Detected
 
